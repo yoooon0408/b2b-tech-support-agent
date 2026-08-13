@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+data/chroma_db/
+data/processed/
+evaluation/results/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 포트폴리오 정리 문서 (개인용, 깃 업로드 제외)
+docs/portfolio/
+
+# 용어 사전 (개인용, 깃 업로드 제외)
+docs/glossary/

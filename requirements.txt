@@ -1,0 +1,35 @@
+# ── RAG Framework ─────────────────────────────
+langchain
+langchain-community
+langchain-anthropic
+langchain-chroma
+langchain-text-splitters
+
+# ── Vector Store ──────────────────────────────
+chromadb
+
+# ── LLM / Embeddings ──────────────────────────
+anthropic
+sentence-transformers      # 로컬 무료 임베딩 (all-MiniLM-L6-v2 등). API 임베딩으로 바꾸려면 voyageai 사용 권장(Anthropic 공식 파트너)
+
+# ── App / UI ───────────────────────────────────
+streamlit
+
+# ── Document Loading & Parsing ─────────────────
+pypdf
+unstructured
+beautifulsoup4
+markdown
+
+# ── Utilities ──────────────────────────────────
+python-dotenv
+pydantic
+tiktoken
+
+# ── Evaluation ─────────────────────────────────
+ragas
+pandas
+
+# ── Dev / Test ─────────────────────────────────
+pytest
+black
