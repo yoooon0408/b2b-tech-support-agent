@@ -3,14 +3,19 @@ import os
 from pathlib import Path
 from typing import List, Tuple
 
+import numpy as np
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
+
+from app.retrieval.reranker import mmr_select, normalize
 
 DEFAULT_PERSIST_DIR = Path(os.getenv("CHROMA_PERSIST_DIR", "data/chroma_db"))
 DEFAULT_COLLECTION_NAME = "tech_docs"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_TOP_K = 3
+DEFAULT_FETCH_K = 20
+DEFAULT_MMR_LAMBDA = 0.7
 
 
 class VectorStore:
@@ -51,6 +56,35 @@ class VectorStore:
     ) -> List[Tuple[Document, float]]:
         """(청크, 거리 점수) 튜플을 반환한다. 점수가 낮을수록 더 유사하다."""
         return self.store.similarity_search_with_score(query, k=top_k)
+
+    def search_mmr(
+        self,
+        query: str,
+        top_k: int = DEFAULT_TOP_K,
+        fetch_k: int = DEFAULT_FETCH_K,
+        lambda_: float = DEFAULT_MMR_LAMBDA,
+    ) -> List[Document]:
+        """관련성과 다양성(중복 회피)을 함께 고려해 상위 top_k개 청크를 선택한다.
+
+        1) 순수 유사도 기준으로 fetch_k개 후보를 먼저 가져오고,
+        2) 후보들을 인제스트 시 이미 계산해 ChromaDB에 저장된 임베딩을 재사용해
+           (재임베딩 없이) MMR로 top_k개로 압축한다.
+        내부 재랭킹 연산은 rerank_cpp(native)가 있으면 그쪽을 쓰고, 없으면 Python으로 폴백한다.
+        """
+        candidates = self.store.similarity_search(query, k=fetch_k)
+        if not candidates:
+            return []
+
+        ids = [c.metadata.get("chunk_id") for c in candidates]
+        stored = self.store._collection.get(ids=ids, include=["embeddings"])
+        id_to_vec = dict(zip(stored["ids"], stored["embeddings"]))
+        cand_vecs = normalize(np.array([id_to_vec[i] for i in ids], dtype=np.float32))
+
+        query_vec = np.array(self.embeddings.embed_query(query), dtype=np.float32)
+        query_vec = normalize(query_vec.reshape(1, -1))[0]
+
+        idx = mmr_select(cand_vecs, query_vec, top_k=top_k, lambda_=lambda_)
+        return [candidates[i] for i in idx]
 
     @property
     def count(self) -> int:
