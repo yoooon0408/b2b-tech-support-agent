@@ -21,6 +21,7 @@ unstructured
 beautifulsoup4
 markdown
 
+
 # ── Utilities ──────────────────────────────────
 python-dotenv
 pydantic
