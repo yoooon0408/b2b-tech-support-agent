@@ -1,10 +1,12 @@
-"""사용자 질문 -> ChromaDB 검색 -> 시스템 프롬프트 결합 -> Claude 호출 -> 답변 생성
-으로 이어지는 RAG 파이프라인."""
+"""사용자 질문 -> ChromaDB 검색 -> 시스템 프롬프트 결합 -> Claude 호출 -> 답변 생성 ->
+Faithfulness 검증 -> (필요 시) 담당자 전달용 티켓 리포트 생성 으로 이어지는 RAG 파이프라인."""
 from dataclasses import dataclass
 from typing import List, Optional
 
+from app.core.faithfulness import FaithfulnessResult, evaluate_faithfulness
 from app.core.llm import generate_answer
 from app.core.prompts import build_system_prompt
+from app.core.ticket import TicketReport, build_ticket_report, is_unresolvable_answer
 from app.retrieval.vectorstore import DEFAULT_TOP_K, VectorStore
 
 
@@ -19,6 +21,10 @@ class Source:
 class RAGResponse:
     answer: str
     sources: List[Source]
+    # 답변이 "문서에서 확인 불가" 정형 문구인 경우 faithfulness 평가는 건너뛰므로 None일 수 있다.
+    faithfulness: Optional[FaithfulnessResult] = None
+    # 답변 품질이 기준 미달이거나(low faithfulness) 해결 불가능한 질문일 경우에만 생성된다.
+    ticket: Optional[TicketReport] = None
 
 
 class RAGChain:
@@ -40,7 +46,24 @@ class RAGChain:
             )
             for chunk in chunks
         ]
-        return RAGResponse(answer=answer_text, sources=sources)
+
+        faithfulness_result: Optional[FaithfulnessResult] = None
+        ticket: Optional[TicketReport] = None
+
+        if is_unresolvable_answer(answer_text):
+            # 검증할 factual claim이 없는 정형 거절 답변이므로 faithfulness 평가는 건너뛴다.
+            ticket = build_ticket_report(question, answer_text, chunks)
+        else:
+            faithfulness_result = evaluate_faithfulness(question, answer_text, chunks)
+            if not faithfulness_result.is_faithful:
+                ticket = build_ticket_report(question, answer_text, chunks, faithfulness_result)
+
+        return RAGResponse(
+            answer=answer_text,
+            sources=sources,
+            faithfulness=faithfulness_result,
+            ticket=ticket,
+        )
 
 
 if __name__ == "__main__":
@@ -59,3 +82,10 @@ if __name__ == "__main__":
         if src.page is not None:
             parts.append(f"p.{src.page}")
         print(f"- {' / '.join(parts)}")
+
+    if result.faithfulness is not None:
+        print(f"\n[Faithfulness] score={result.faithfulness.score:.2f}")
+
+    if result.ticket is not None:
+        print("\n[담당자 전달용 티켓 리포트 / Escalation Ticket]")
+        print(result.ticket.to_text())

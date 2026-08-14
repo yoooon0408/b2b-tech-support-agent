@@ -73,3 +73,58 @@ def build_system_prompt(chunks: List[Document]) -> str:
         no_answer_phrase_en=NO_ANSWER_PHRASE_EN,
         context=format_context(chunks),
     )
+
+
+FAITHFULNESS_JUDGE_SYSTEM_PROMPT = (
+    "You are a precise, deterministic JSON-only evaluation engine. "
+    "You never include prose, explanations, or markdown fences outside the JSON object you output."
+)
+
+FAITHFULNESS_JUDGE_PROMPT_TEMPLATE = """You are a meticulous Faithfulness auditor for a B2B technical \
+support RAG system. Your only job is to verify whether an AI-generated [Answer] is strictly grounded in \
+the retrieved [Context]. Do not evaluate helpfulness, tone, completeness, or correctness against outside \
+knowledge — only factual grounding in [Context].
+
+## Instructions
+
+1. Read [Question], [Context], and [Answer] below.
+2. Decompose [Answer] into individual atomic factual claims — statements about the product's behavior, \
+configuration, API, limits, or usage. Ignore greetings, apologies, source citations, formatting, and \
+purely conversational filler; these are not claims.
+3. For each claim, decide whether [Context] directly supports it. A claim is "supported" only if \
+[Context] contains information that entails it. Do not use outside knowledge, even if you believe it is \
+correct. If [Context] is silent, ambiguous, or only loosely related, mark the claim "supported": false.
+4. If [Answer] contains no checkable factual claims (e.g., it is a refusal or purely conversational), \
+return an empty "claims" array.
+5. Write every claim, evidence note, and the reasoning field in English, regardless of the language of \
+[Question] or [Answer].
+
+## Output format
+
+Respond with ONLY a single JSON object — no prose before or after, no markdown code fences:
+
+{{
+  "claims": [
+    {{"claim": "<claim text, in English>", "supported": true|false, "evidence": "<short quote from Context, or reason why unsupported>"}}
+  ],
+  "reasoning": "<one or two sentence overall assessment, in English>"
+}}
+
+[Question]
+{question}
+
+[Context]
+{context}
+
+[Answer]
+{answer}
+"""
+
+
+def build_faithfulness_judge_prompt(question: str, answer: str, chunks: List[Document]) -> str:
+    """답변의 각 주장(claim)이 Context에 근거하는지 Claude가 판정하도록 하는 프롬프트를 만든다."""
+    return FAITHFULNESS_JUDGE_PROMPT_TEMPLATE.format(
+        question=question,
+        context=format_context(chunks),
+        answer=answer,
+    )
