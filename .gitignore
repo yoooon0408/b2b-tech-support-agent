@@ -14,3 +14,8 @@ docs/portfolio/
 
 # 용어 사전 (개인용, 깃 업로드 제외)
 docs/glossary/
+
+# native/ pybind11 빌드 산출물 (소스는 커밋, 빌드 결과물은 제외)
+native/build/
+native/*.pyd
+native/*.so
